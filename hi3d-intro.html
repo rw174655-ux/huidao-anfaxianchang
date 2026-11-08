@@ -1,0 +1,111 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>回到案发现场</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+canvas{display:block;width:100vw;height:100vh}
+#sub{position:fixed;left:0;right:0;bottom:11vh;margin:0 auto;width:fit-content;max-width:92vw;white-space:nowrap;text-align:center;color:#fff;font-size:clamp(18px,2.6vw,36px);font-weight:600;line-height:1.6;letter-spacing:.12em;text-shadow:0 2px 8px rgba(0,0,0,.85);opacity:0;transition:opacity .4s;padding:.75em 1.8em;border-radius:28px;overflow:hidden;isolation:isolate;
+background:radial-gradient(120% 90% at 20% 0%,rgba(255,255,255,.16),rgba(255,255,255,0) 55%),radial-gradient(80% 80% at 100% 110%,rgba(120,220,255,.12),rgba(255,255,255,0) 60%),rgba(255,255,255,.04);
+border:1px solid rgba(255,255,255,.28);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.55),inset 0 -8px 18px rgba(140,220,255,.10),inset 0 0 0 1px rgba(255,255,255,.06),0 10px 30px rgba(0,0,0,.25);
+backdrop-filter:blur(5px) saturate(1.8) brightness(1.08);-webkit-backdrop-filter:blur(5px) saturate(1.8) brightness(1.08);z-index:4}
+#sub:before{content:"";position:absolute;inset:-40%;z-index:-1;background:conic-gradient(from 0deg,transparent 0 20%,rgba(255,255,255,.14) 28%,transparent 36% 60%,rgba(120,230,255,.12) 70%,transparent 80%);filter:blur(18px);animation:liq 7s linear infinite}
+#sub:after{content:"";position:absolute;left:8%;right:8%;top:6%;height:38%;border-radius:999px;z-index:-1;background:linear-gradient(rgba(255,255,255,.22),rgba(255,255,255,0));filter:blur(2px)}
+@keyframes liq{to{transform:rotate(360deg)}}
+#sub:empty{display:none}
+#sub b{color:#ff4d75;font-weight:700;text-shadow:0 0 12px #f04}
+#bars:before,#bars:after{content:"";position:fixed;left:0;right:0;height:7vh;background:#000;z-index:2}#bars:before{top:0}#bars:after{bottom:0}
+#ui{position:fixed;right:20px;top:calc(7vh + 12px);z-index:3}
+button{background:#000a;color:#9ef;border:1px solid #0cf8;padding:8px 16px;cursor:pointer;font-size:14px;letter-spacing:.12em}
+#start{position:fixed;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#9ef;background:#000;cursor:pointer;letter-spacing:.35em}
+#game{position:fixed;inset:0;display:none;background:#000;color:#fff;z-index:6}#game iframe{width:100%;height:100%;border:0}
+</style></head><body>
+<canvas id="c"></canvas><canvas id="b3" style="position:fixed;inset:0;pointer-events:none;z-index:1"></canvas><div id="bars"></div><div id="sub"></div>
+<div id="ui"><button id="skip">跳过片头 ▶</button></div>
+<div id="start"><div style="font-size:clamp(40px,7vw,96px);color:#fff;font-weight:600;text-shadow:0 0 18px rgba(0,200,255,.6)">回到案发现场</div><div style="margin-top:18px;opacity:.7">点击开始</div></div>
+<div id="game"></div><audio id="bgm" src="hi3d-bgm.mp3" loop preload="auto"></audio><button id="mute" style="position:fixed;left:20px;top:calc(7vh + 12px);z-index:7">♪ 音乐 开</button>
+<script>
+const GAME_URL="hi3d-game.html";
+const c=document.getElementById('c'),x=c.getContext('2d'),sub=document.getElementById('sub');
+const L=s=>{const i=new Image();i.src=s;return i},I1=L('hi3d-shot1.png'),I2=L('hi3d-shot2.png'),I3=L('hi3d-shot3.png');
+let W,H,D;function rs(){D=devicePixelRatio||1;W=c.width=innerWidth*D;H=c.height=innerHeight*D}rs();onresize=rs;
+const cl=t=>Math.min(1,Math.max(0,t)),R=(a,b,t)=>a+(b-a)*cl(t),E=t=>(t=cl(t),t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2);
+let sd=7;const rnd=()=>(sd=(sd*16807)%2147483647)/2147483647;
+const rain=[...Array(300)].map(()=>[rnd(),rnd(),rnd()]),dust=[...Array(80)].map(()=>[rnd(),rnd(),rnd()]);
+function setSub(h){if(sub.dataset.h!==h){sub.dataset.h=h;sub.style.opacity=0;if(h)setTimeout(()=>{sub.innerHTML=h;sub.style.opacity=1},200)}}
+function cover(img,s,fx,fy,rot=0){if(!img.complete||!img.width)return;const k=Math.max(W/img.width,H/img.height)*s,iw=img.width*k,ih=img.height*k;
+x.save();x.translate(W/2,H/2);x.rotate(rot);x.drawImage(img,-iw*fx,-ih*fy,iw,ih);x.restore()}
+// 以图上归一化坐标(fx,fy)为焦点放大
+function focus(img,s,fx,fy,rot){cover(img,s,fx,fy,rot)}
+const trails=[];
+function wing(h){
+x.beginPath();x.moveTo(0,-h*.08);x.bezierCurveTo(h*.25,-h*.55,h*.85,-h*.75,h*.95,-h*.55);x.bezierCurveTo(h*1.0,-h*.35,h*.8,-h*.1,h*.55,-h*.02);x.lineTo(0,0);x.closePath();
+let g=x.createLinearGradient(0,0,h*.9,-h*.6);g.addColorStop(0,'#04204a');g.addColorStop(.35,'#1aa0ff');g.addColorStop(.7,'#4ef0ff');g.addColorStop(1,'#06142e');x.fillStyle=g;x.fill();x.strokeStyle='#071222';x.lineWidth=h*.035;x.stroke();
+x.beginPath();x.moveTo(0,h*.02);x.bezierCurveTo(h*.5,-h*.02,h*.78,h*.25,h*.6,h*.5);x.bezierCurveTo(h*.45,h*.72,h*.15,h*.6,0,h*.18);x.closePath();
+g=x.createLinearGradient(0,0,h*.6,h*.6);g.addColorStop(0,'#05306a');g.addColorStop(.5,'#22c8ff');g.addColorStop(1,'#071a38');x.fillStyle=g;x.fill();x.stroke();
+x.strokeStyle='rgba(200,250,255,.55)';x.lineWidth=h*.008;x.beginPath();for(const [ex,ey] of [[.9,-.55],[.75,-.35],[.6,-.15],[.6,.35],[.4,.5]]){x.moveTo(0,0);x.quadraticCurveTo(h*ex*.5,h*ey*.3,h*ex,h*ey)}x.stroke();
+x.fillStyle='rgba(220,255,255,.9)';for(const [dx,dy] of [[.82,-.6],[.9,-.45],[.7,-.68],[.55,.45]]){x.beginPath();x.arc(h*dx,h*dy,h*.018,0,7);x.fill()}}
+function bfly(px,py,sz,t,flap=1,ang=0){window.BF={x:px/D,y:py/D,s:sz/D,t,flap,ang,on:1};return;const f=flap?(.2+.8*Math.abs(Math.sin(t*15))):.95,h=sz*.6;
+trails.push([px,py]);if(trails.length>26)trails.shift();
+x.save();x.globalCompositeOperation='lighter';trails.forEach((p,i)=>{x.fillStyle=`rgba(60,210,255,${i/trails.length*.35})`;x.beginPath();x.arc(p[0]+Math.sin(i)*4*D,p[1],(1+i/9)*D,0,7);x.fill()});x.restore();
+x.save();x.translate(px,py);x.rotate(ang);x.shadowColor='#2cf';x.shadowBlur=30*D;
+for(const d of[-1,1]){x.save();x.scale(d*f,1);wing(h);x.restore()}
+x.shadowBlur=0;x.fillStyle='#0a1520';x.beginPath();x.ellipse(0,h*.08,h*.045,h*.3,0,0,7);x.fill();x.beginPath();x.arc(0,-h*.22,h*.05,0,7);x.fill();
+x.strokeStyle='#9ef';x.lineWidth=h*.012;x.beginPath();x.moveTo(-h*.02,-h*.26);x.quadraticCurveTo(-h*.1,-h*.45,-h*.16,-h*.5);x.moveTo(h*.02,-h*.26);x.quadraticCurveTo(h*.1,-h*.45,h*.16,-h*.5);x.stroke();x.restore()}
+function rainFx(t,sp,a){x.strokeStyle=`rgba(170,220,255,${a})`;x.lineWidth=D;x.beginPath();rain.forEach(([u,v,z])=>{const ry=(v*H+t*H*sp*(.6+z))%H,rx=u*W;x.moveTo(rx,ry);x.lineTo(rx-3*D,ry+(10+z*20)*D)});x.stroke()}
+function grade(a){const g=x.createRadialGradient(W/2,H/2,H*.3,W/2,H/2,H*.95);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,`rgba(0,4,10,${a})`);x.fillStyle=g;x.fillRect(0,0,W,H)}
+function hud(t,txt){x.font=`${12*D}px monospace`;x.fillStyle='rgba(0,220,255,.7)';x.fillText(txt,30*D,H*.07+28*D);x.fillText('T+'+t.toFixed(2),W-130*D,H*.93-14*D)}
+function shot1(t){const p=t/6;focus(I1,R(1.0,1.18,E(p)),.5,R(.5,.42,p));
+grade(.6);hud(t,'ORBITAL FEED // EARTH-SECTOR 07');setSub(t>.7?'公元 <b>2126</b> 年，98% 的人类已移居火星，<br>仅少数人还留在地球……':'')}
+function shot2(t){const p=t/7;// 跟随蝴蝶贴地穿越，冲向车辆
+const s=R(1.05,2.4,Math.pow(cl(p),1.6)),fx=R(.5,.66,E(p)),fy=R(.62,.45,E(p)),roll=Math.sin(t*1.3)*.035;focus(I2,s,fx,fy,roll);
+x.save();x.globalCompositeOperation='lighter';dust.forEach(([u,v,z])=>{const k=(z+t*.35)%1,sc=1+k*6,px=W/2+(u-.5)*W*sc*.6,py=H*.45+(v-.5)*H*sc*.6;x.fillStyle=`rgba(80,220,255,${k*.5})`;x.fillRect(px,py,2*D*sc*.4,2*D*sc*.4)});x.restore();
+rainFx(t,2.2,.22);
+if(Math.random()<.25){x.save();x.globalCompositeOperation='lighter';x.fillStyle='rgba(60,160,255,.08)';x.fillRect(0,0,W,H);x.restore()}
+const bx=W*.42+Math.sin(t*1.6)*W*.06,by=H*.58+Math.sin(t*2.3)*H*.05;bfly(bx,by,H*R(.24,.16,p),t,1,Math.sin(t*1.6)*.15);
+grade(.55);hud(t,'TRACKING // MORPHO-CYB 01');setSub(t>.4?'清晨 <b>04:18</b>，地球 7 号森林公路，<br>一场车祸刚刚发生。':'')}
+function shot3(t){// 蝴蝶落肩 → 侧头 → 推入红灯
+const rx=.655,ry=.88;let s=1.08;if(t>4.3)s=1.08+Math.pow((t-4.3)/2.2,3)*28;
+const tilt=t>2.6?E((t-2.6)/.9)*.025:0;const k=Math.max(W/1088,H/608)*s;
+focus(I3,s,R(.5,rx,E((t-4)/1.5)),R(.5,ry,E((t-4)/1.5)),-tilt);
+const ix=(u,v)=>{const fx=R(.5,rx,E((t-4)/1.5)),fy=R(.5,ry,E((t-4)/1.5));return[W/2+(u-fx)*1088*k,H/2+(v-fy)*608*k]};
+const[sx,sy]=ix(.36,.53);if(t<2.4){const lp=E(t/2.2);bfly(R(W*1.05,sx,lp),R(-H*.05,sy,lp),H*R(.26,.18,lp),t,1,R(.6,0,lp))}else if(t<4.3){x.save();x.globalCompositeOperation='lighter';x.globalAlpha=t<3.4?.5+.5*Math.abs(Math.sin(t*9)):.4;const g=x.createRadialGradient(sx,sy,0,sx,sy,H*.12);g.addColorStop(0,'rgba(60,220,255,.5)');g.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=g;x.fillRect(0,0,W,H);x.restore()}
+const[lx,ly]=ix(.655,.885);const on=t>3.2;x.save();x.globalCompositeOperation='lighter';const pr=(on?1:.25)*(1+.35*Math.sin(t*8)),rr=H*.05*s*.3+H*.04;const g=x.createRadialGradient(lx,ly,0,lx,ly,rr*pr*1.6);g.addColorStop(0,`rgba(255,40,40,${on?.9:.2})`);g.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=g;x.fillRect(0,0,W,H);x.restore();
+rainFx(t,1.5,.15);grade(.5);
+if(t>3.3&&t<4.3)hud(t,'● REC  BODYCAM P-0418 ONLINE');
+if(t>6.3){const a=cl((t-6.3)/.35);x.fillStyle=t<6.75?`rgba(255,30,40,${a})`:`rgba(255,255,255,${1-(t-6.75)/.25})`;x.fillRect(0,0,W,H)}setSub('')}
+const SPEED=20/12;let t0=null,done=false;
+function frame(now){if(done)return;if(t0==null)t0=now;const t=(now-t0)/1000*SPEED;x.fillStyle='#000';x.fillRect(0,0,W,H);window.BF&&(BF.on=0);
+if(t<6)shot1(t);else if(t<13)shot2(t-6);else if(t<20)shot3(t-13);else return enter();
+if(t>=6&&t<6.05||t>=13&&t<13.05)trails.length=0;
+const d=Math.min(Math.abs(t-6),Math.abs(t-13)),fd=t<1?1-t:d<.35?1-d/.35:0;if(fd>0){x.fillStyle=`rgba(0,0,0,${fd})`;x.fillRect(0,0,W,H)}
+requestAnimationFrame(frame)}
+function enter(){done=true;try{let v=bgm.volume;const iv=setInterval(()=>{v=Math.max(.7,v-.05);bgm.volume=v;if(v<=.7)clearInterval(iv)},120)}catch(e){};setSub('');const g=document.getElementById('game');g.style.display='block';
+fetch(GAME_URL,{method:'HEAD'}).then(r=>{if(!r.ok)throw 0;g.innerHTML=`<iframe src="${GAME_URL}" allow="fullscreen"></iframe>`}).catch(()=>{g.innerHTML='<div style="display:flex;height:100%;align-items:center;justify-content:center;flex-direction:column;gap:16px;letter-spacing:.15em"><div style="color:#f33">● REC 执法记录仪已启动</div><div style="opacity:.7">未找到游戏入口 hi3d-game.html，请将游戏文件放在本页同目录。</div></div>'})}
+const QT=parseFloat(new URLSearchParams(location.search).get('t'));if(!isNaN(QT)){document.getElementById('start').remove();t0=performance.now()-QT*1000/SPEED;requestAnimationFrame(frame)}
+document.getElementById('start').onclick=e=>{e.currentTarget.remove();requestAnimationFrame(frame)};
+document.getElementById('skip').onclick=enter;
+const bgm=document.getElementById('bgm'),mb=document.getElementById('mute');bgm.volume=1;
+let bgmOn=false;function playBgm(){bgmOn=true;if(bgm.paused)bgm.play().catch(()=>{})}
+bgm.addEventListener('pause',()=>{if(bgmOn)setTimeout(playBgm,50)});bgm.addEventListener('ended',()=>{bgm.currentTime=0;playBgm()});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)playBgm()});setInterval(()=>{if(bgmOn&&bgm.paused)playBgm()},1000);
+window.addEventListener('focus',playBgm);
+mb.onclick=()=>{bgm.muted=!bgm.muted;playBgm();mb.textContent=bgm.muted?'♪ 音乐 关':'♪ 音乐 开'};
+document.getElementById('start')&&document.getElementById('start').addEventListener('click',playBgm);addEventListener('pointerdown',playBgm,{once:true});
+window.addEventListener('message',e=>{if(e.data&&e.data.bgmVolume!=null)bgm.volume=e.data.bgmVolume});
+</script><script type="importmap">{"imports":{"three":"./lib/three.module.js","three/addons/":"./lib/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';import {MeshoptDecoder} from 'three/addons/libs/meshopt_decoder.module.js';
+const cv=document.getElementById('b3'),r=new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:true});r.setPixelRatio(devicePixelRatio);r.outputColorSpace=THREE.SRGBColorSpace;
+const sc=new THREE.Scene(),cam=new THREE.OrthographicCamera(0,1,0,1,-100,100);sc.add(new THREE.HemisphereLight(0xbfefff,0x10202a,2.2));const dl=new THREE.DirectionalLight(0xffffff,2.5);dl.position.set(1,2,3);sc.add(dl);
+function rs(){r.setSize(innerWidth,innerHeight,false);cam.left=0;cam.right=innerWidth;cam.top=0;cam.bottom=-innerHeight;cam.updateProjectionMatrix()}rs();addEventListener('resize',rs);
+const root=new THREE.Group();sc.add(root);let L=null,Rw=null,body=null,glow;
+const gl=new GLTFLoader();gl.setMeshoptDecoder(MeshoptDecoder);
+gl.load('models/hi3d-butterfly.glb',g=>{const m=g.scene;const b=new THREE.Box3().setFromObject(m),c=b.getCenter(new THREE.Vector3()),sz=b.getSize(new THREE.Vector3());
+m.position.sub(c);const k=1/Math.max(sz.x,sz.y,sz.z);
+// split into left/right halves by cloning with clipping planes so wings can flap
+const mk=(sign)=>{const cl=m.clone(true);const pl=new THREE.Plane(new THREE.Vector3(sign,0,0),0);cl.traverse(o=>{if(o.isMesh){o.material=o.material.clone();o.material.clippingPlanes=[pl];o.material.side=THREE.DoubleSide;o.material.emissive=new THREE.Color(0x1188ff);o.material.emissiveIntensity=.25}});const p=new THREE.Group();p.add(cl);p.scale.setScalar(k);return p};
+r.localClippingEnabled=true;L=mk(-1);Rw=mk(1);const tilt=new THREE.Group();tilt.add(L,Rw);root.add(tilt);root.userData.ok=1;
+window.BF3_DIM={x:sz.x*k,y:sz.y*k,z:sz.z*k}},undefined,e=>{console.warn('butterfly glb failed',e);window.BF3_FAIL=1});
+function loop(){requestAnimationFrame(loop);const B=window.BF;if(!root.userData.ok||!B||!B.on){root.visible=false;r.render(sc,cam);return}
+root.visible=true;root.position.set(B.x,-B.y,0);const s=B.s*1.6;root.scale.setScalar(s);
+// view from front-above so wings read correctly, head up
+root.rotation.set(0.25,0,-B.ang);const f=B.flap?Math.sin(B.t*15)*0.9:0.12;L.rotation.y=-Math.abs(f)*0.9;Rw.rotation.y=Math.abs(f)*0.9;r.render(sc,cam)}loop();
+</script></body></html>
