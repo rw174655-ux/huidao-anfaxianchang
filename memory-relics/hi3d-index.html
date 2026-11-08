@@ -1,0 +1,165 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>2126 // 记忆回溯：人生遗物</title>
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"PingFang SC",monospace;color:#7ff}
+canvas{display:block}
+#hud{position:fixed;inset:0;pointer-events:none}
+.c{position:absolute;width:60px;height:60px;border:2px solid #2cc}
+.tl{left:16px;top:16px;border-right:0;border-bottom:0}.tr{right:16px;top:16px;border-left:0;border-bottom:0}
+.bl{left:16px;bottom:16px;border-right:0;border-top:0}.br{right:16px;bottom:16px;border-left:0;border-top:0}
+#tag{position:absolute;left:96px;top:28px;font-size:13px;letter-spacing:2px;color:#4dd}
+#clock{position:absolute;right:96px;top:28px;font-size:13px;color:#8aa;text-align:right}
+#title{position:absolute;left:50%;top:14%;transform:translateX(-50%);font-size:22px;letter-spacing:6px;color:#9ff;text-shadow:0 0 12px #0ff,0 0 26px #a4f}
+#sub{position:absolute;left:50%;bottom:16%;transform:translateX(-50%);width:70%;text-align:center;font-size:30px;line-height:1.6;color:#fff;text-shadow:0 0 14px #29f,0 0 24px #7a3cff88,0 0 2px #0ff}
+#sub.warn{color:#cff;text-shadow:0 0 18px #f24}
+#hint{position:absolute;left:50%;bottom:7%;transform:translateX(-50%);font-size:15px;letter-spacing:3px;color:#ffd36b;opacity:0;transition:.4s;animation:bl 1.2s infinite}
+@keyframes bl{50%{color:#a07a20}}
+#bgimg{position:fixed;inset:0;opacity:0;transition:opacity 1.2s;background-size:cover;background-position:center;mix-blend-mode:screen;filter:blur(6px)}
+#flash{position:fixed;inset:0;background:radial-gradient(circle,#4af0 30%,#0af6);opacity:0;pointer-events:none}
+#pupil{position:fixed;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 50%,#000 0,#000 var(--r),#3a1a6a calc(var(--r) + 2%),#000 calc(var(--r) + 30%));opacity:0;--r:0%}
+#scan{position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,#0ff1 0 1px,transparent 1px 3px);mix-blend-mode:screen}
+#start{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#000c;pointer-events:auto;cursor:pointer;z-index:9}
+#start b{font-size:26px;letter-spacing:8px;color:#9ff}#start span{color:#ffd36b;letter-spacing:3px}
+#err{position:fixed;left:20px;bottom:90px;color:#f88;font-size:12px}
+</style>
+<script type="importmap">{"imports":{"three":"./lib/three.module.min.js"}}</script></head><body>
+<div id="bgimg"></div>
+<div id="hud"><div class="c tl"></div><div class="c tr"></div><div class="c bl"></div><div class="c br"></div>
+<div id="tag">NEURAL LINK // ARCHAEOLOGIST-B // OCULAR DIVE</div><div id="clock">2126-11-08 04:31:07<br>FOREST HWY 09 · MEMORY BUFFER</div>
+<div id="title"></div><div id="sub"></div><div id="hint"></div></div>
+<div id="flash"></div><div id="pupil"></div><div id="scan"></div><div id="err"></div>
+<div id="start"><b>接入考古学家 B 的视神经</b><span>点击或按空格 · 开始记忆同步</span></div>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from './lib/addons/loaders/GLTFLoader.js';
+const $=id=>document.getElementById(id);
+const R=new THREE.WebGLRenderer({antialias:true});R.setPixelRatio(Math.min(devicePixelRatio,2));R.setSize(innerWidth,innerHeight);
+R.toneMapping=THREE.ACESFilmicToneMapping;R.outputColorSpace=THREE.SRGBColorSpace;document.body.prepend(R.domElement);
+const S=new THREE.Scene();S.background=new THREE.Color(0x05041a);S.fog=new THREE.FogExp2(0x060418,.045);
+const cam=new THREE.PerspectiveCamera(42,innerWidth/innerHeight,.05,200);
+addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();R.setSize(innerWidth,innerHeight)});
+S.add(new THREE.AmbientLight(0x3355aa,.6));const key=new THREE.DirectionalLight(0x9fdcff,1.4);key.position.set(2,5,6);S.add(key);
+const red=new THREE.PointLight(0xff2040,0,25),blue=new THREE.PointLight(0x2060ff,0,25);red.position.set(-6,3,-4);blue.position.set(6,3,-4);S.add(red,blue);const purp=new THREE.PointLight(0x9a3cff,18,30);purp.position.set(0,4,-8);S.add(purp);const purp2=new THREE.PointLight(0xc040ff,6,14);purp2.position.set(-5,-1,3);S.add(purp2);
+const warm=new THREE.PointLight(0xffa040,0,12);S.add(warm);
+
+// 雨夜街道：湿地面 + 霓虹残影 + 雨
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(80,80),new THREE.MeshStandardMaterial({color:0x05070c,roughness:.15,metalness:.8}));ground.rotation.x=-Math.PI/2;ground.position.y=-1.6;S.add(ground);
+const neon=new THREE.Group();S.add(neon);
+['#05d9e8','#2a7bff','#d1f7ff','#9b4dff','#c03cff','#05d9e8'].forEach((c,i)=>{for(let k=0;k<4;k++){const m=new THREE.Mesh(new THREE.PlaneGeometry(.15+Math.random()*.3,2+Math.random()*5),new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:.0,blending:THREE.AdditiveBlending,depthWrite:false}));
+m.position.set((Math.random()-.5)*40,1+Math.random()*4,-14-Math.random()*16);neon.add(m)}});
+const rainN=4000,rg=new THREE.BufferGeometry(),rp=new Float32Array(rainN*3);for(let i=0;i<rainN;i++){rp[i*3]=(Math.random()-.5)*40;rp[i*3+1]=Math.random()*20-2;rp[i*3+2]=(Math.random()-.5)*40}
+rg.setAttribute('position',new THREE.BufferAttribute(rp,3));const rain=new THREE.Points(rg,new THREE.PointsMaterial({color:0x6fa8ff,size:.04,transparent:true,opacity:.5}));S.add(rain);
+
+// 数据粒子
+const PN=6000,pg=new THREE.BufferGeometry(),pp=new Float32Array(PN*3),pFrom=new Float32Array(PN*3),pTo=new Float32Array(PN*3);
+pg.setAttribute('position',new THREE.BufferAttribute(pp,3));
+const pm=new THREE.PointsMaterial({color:0x37c8ff,size:.035,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false});const parts=new THREE.Points(pg,pm);S.add(parts);
+function sphereCloud(arr,c,r){for(let i=0;i<PN;i++){const v=new THREE.Vector3().randomDirection().multiplyScalar(r*Math.cbrt(Math.random()));arr.set([c.x+v.x,c.y+v.y,c.z+v.z],i*3)}}
+function surfCloud(arr,obj){const pts=[];obj.updateMatrixWorld(true);obj.traverse(o=>{if(o.isMesh){const p=o.geometry.attributes.position;for(let i=0;i<p.count;i+=Math.max(1,p.count/1500|0))pts.push(new THREE.Vector3().fromBufferAttribute(p,i).applyMatrix4(o.matrixWorld))}});
+for(let i=0;i<PN;i++){const v=pts[i%pts.length];arr.set([v.x+(Math.random()-.5)*.02,v.y+(Math.random()-.5)*.02,v.z],i*3)}}
+
+// 五个遗物 + 投影框（弧形）
+const ITEMS=[{n:'准考证',c:0xf2e2a8,s:[1.0,1.4,.02]},{n:'手机',c:0x222831,s:[.75,1.5,.08]},{n:'外卖小票',c:0xf4f4f0,s:[.7,1.6,.01]},{n:'派单单据',c:0xdfe8f0,s:[.9,1.3,.01]},{n:'全家福',c:0xc89a5a,s:[1.5,1.1,.04]}];
+const frames=[];const ARC=7;
+function frameTex(label){const c=document.createElement('canvas');c.width=512;c.height=640;const g=c.getContext('2d');
+const gr=g.createLinearGradient(0,0,0,640);gr.addColorStop(0,'rgba(0,200,255,.18)');gr.addColorStop(.7,'rgba(0,60,140,.06)');gr.addColorStop(1,'rgba(150,60,255,.16)');g.fillStyle=gr;g.fillRect(0,0,512,640);
+g.strokeStyle='#29e6ff';g.lineWidth=6;g.strokeRect(6,6,500,628);g.lineWidth=2;g.strokeStyle='#b46bff';g.strokeRect(22,22,468,596);g.strokeStyle='#29e6ff';
+g.fillStyle='#29e6ff';g.font='26px monospace';g.fillText('RELIC//'+label,34,60);g.font='16px monospace';g.fillText('MEM.ID '+(Math.random()*1e8|0).toString(16).toUpperCase(),34,606);
+for(let y=0;y<640;y+=4){g.fillStyle='rgba(0,255,255,.05)';g.fillRect(0,y,512,1)}const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t}
+function backTex(txt){const c=document.createElement('canvas');c.width=512;c.height=716;const g=c.getContext('2d');g.fillStyle='#e8d6a0';g.fillRect(0,0,512,716);
+for(let i=0;i<300;i++){g.fillStyle=`rgba(150,110,40,${Math.random()*.08})`;g.beginPath();g.arc(Math.random()*512,Math.random()*716,Math.random()*30,0,7);g.fill()}
+g.fillStyle='#1b2f8a';g.font='italic 52px "Kaiti SC",serif';g.save();g.translate(80,380);g.rotate(-.06);g.fillText(txt,0,0);g.restore();const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t}
+ITEMS.forEach((it,i)=>{const a=(i-2)*.38,root=new THREE.Group();root.position.set(Math.sin(a)*ARC,0,-Math.cos(a)*ARC+ARC-2);root.rotation.y=-a;S.add(root);
+const panel=new THREE.Mesh(new THREE.PlaneGeometry(2.4,3),new THREE.MeshBasicMaterial({map:frameTex(it.n),transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+panel.position.z=-.3;root.add(panel);const mem=new THREE.Mesh(new THREE.PlaneGeometry(2.2,2.8),new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false,color:0xffffff,toneMapped:false}));mem.position.z=-.33;root.add(mem);
+const beam=new THREE.Mesh(new THREE.ConeGeometry(1.3,2.2,32,1,true),new THREE.MeshBasicMaterial({color:0x22ccff,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+beam.position.y=-1.9;root.add(beam);
+const holder=new THREE.Group();root.add(holder);
+const ph=new THREE.Mesh(new THREE.BoxGeometry(...it.s),[0,0,0,0,0,0].map((_,k)=>new THREE.MeshStandardMaterial({color:it.c,roughness:.6,emissive:0x0a2a40})));
+if(i===0)ph.material[5]=new THREE.MeshStandardMaterial({map:backTex('考出去，别回来'),roughness:.8});
+if(i===1)ph.material[4]=new THREE.MeshStandardMaterial({color:0x0a1420,emissive:0x000000});
+holder.add(ph);holder.userData.ph=ph;
+frames.push({mem,memT:0,root,panel,beam,holder,glow:0,item:ph,base:root.position.clone()})});
+
+// 若存在 models/hi3d-relic-1..5.glb 则替换占位物
+const loader=new GLTFLoader();
+frames.forEach((f,i)=>loader.load(`./models/hi3d-relic-${i+1}.glb`,g=>{const m=g.scene,b=new THREE.Box3().setFromObject(m),s=b.getSize(new THREE.Vector3()),c=b.getCenter(new THREE.Vector3());
+m.position.sub(c);const w=new THREE.Group();w.add(m);w.scale.setScalar(1.6/Math.max(s.x,s.y,s.z));f.holder.remove(f.item);f.holder.add(w);f.item=w},undefined,()=>{}));
+
+// 背景：横版图按“居中裁切”贴进当前遗物的竖框，同时全屏淡淡铺一层做氛围
+const BGF={exam:['bg/hi3d-bg-exam-warm.png',0],room:['bg/hi3d-bg-room.png',1],office:['bg/hi3d-bg-office.png',2],door:['bg/hi3d-bg-door.png',3],home:['bg/hi3d-bg-home.png',4]};
+const TL=new THREE.TextureLoader();
+function bg(k){const e=$('bgimg');frames.forEach(f=>f.memT=0);if(!k){e.style.opacity=0;return}const [url,i]=BGF[k];
+ e.style.background=`url(${url}) center/cover`;e.style.opacity=.3;
+ TL.load(url,t=>{t.colorSpace=THREE.SRGBColorSpace;const fa=2.2/2.8,ia=t.image.width/t.image.height,w=fa/ia;t.repeat.set(w,1);t.offset.set((1-w)/2,0);
+  const m=frames[i].mem.material;m.map=t;m.needsUpdate=true;frames[i].memT=.95},undefined,()=>{})}
+// 镜头工具
+const V=(x,y,z)=>new THREE.Vector3(x,y,z);
+function camAt(i,d=3.2,h=0){const f=frames[i].root,p=f.position.clone().add(V(0,h,d*1.8+.6).applyEuler(f.rotation));return{p,t:f.position.clone().add(V(0,h,0))}}
+const overview={p:V(0,1.2,9.5),t:V(0,0,0)};
+let cFrom={p:V(0,1.5,30),t:V(0,0,0)},cTo=cFrom,cT0=0,cDur=1,curT=V();
+const SPD=1.8;let fastUntil=0;function moveCam(to,dur){dur/=SPD;if(now<fastUntil)dur=Math.min(dur,.5);cFrom={p:cam.position.clone(),t:curT.clone()};cTo=to;cT0=now;cDur=dur}
+const ease=x=>x<.5?2*x*x:1-(-2*x+2)**2/2;
+
+// 文字
+let typeJob=0;function say(txt,cls=''){const el=$('sub');el.className=cls;const job=++typeJob;el.innerHTML='';let k=0;const chars=[...txt];
+const step=()=>{if(job!==typeJob)return;if(k<chars.length){el.innerHTML=chars.slice(0,++k).join('').replace(/\|/g,'<br>');setTimeout(step,35)}};step()}
+const title=t=>$('title').textContent=t;
+const hint=t=>{$('hint').textContent=t||'';$('hint').style.opacity=t?1:0};
+function lit(i,v){frames[i].glow=v}
+function flash(col){const e=$('flash');e.style.background=`radial-gradient(circle,transparent 30%,${col})`;e.animate([{opacity:0},{opacity:.9},{opacity:0},{opacity:.6},{opacity:0}],{duration:900})}
+
+// 分镜时间轴（秒）；gate=需按空格
+const SHOTS=[
+{t:0,go(){title('');say('记忆同步 87%...');pupil(1);sphereCloud(pFrom,V(0,0,0),.3);sphereCloud(pTo,V(0,0,0),14);morph(1.8,.9);cam.position.set(0,0,3);curT.set(0,0,-5);moveCam({p:V(0,.5,14),t:V(0,0,0)},2)}},
+{t:2,go(){say('记忆同步 100%');pupil(0);neonOn=1;moveCam(overview,3.5);frames.forEach((f,i)=>setTimeout(()=>f.on=1,i*350))}},
+{t:6,go(){say('记忆检索完成');[0,1,2,3,4].forEach(i=>setTimeout(()=>lit(i,1),i*600));setTimeout(()=>moveCam(camAt(0,4.5,.2),1.3),3000)}},
+{t:10,gate:'按空格，进入 18 岁',go(){frames.forEach((f,i)=>lit(i,i==0?1:.25));title('18 岁 ｜ 2014');say('18 岁 ｜ 2014');bg('exam');focusI=0;warmOn=1;moveCam(camAt(0,2.4),1.2)}},
+{t:13,go(){spin={i:0,from:0,to:Math.PI,t0:now,d:1};say('考出去，别回来');moveCam(camAt(0,1.6,.1),3)}},
+{t:16,gate:'按空格，进入 22 岁',go(){spin=null;frames[0].holder.rotation.y=0;focusI=1;warmOn=1;frames.forEach((f,i)=>lit(i,i==1?1:.25));title('22 岁 ｜ 2018');say('22 岁 ｜ 2018');bg('room');moveCam(camAt(1,2.4),1);setTimeout(()=>screenOn=1,1200)}},
+{t:19,go(){say('等我拿到大厂 offer，就去找你。');moveCam(camAt(1,1.3,-.2),3)}},
+{t:22,gate:'按空格，进入他的 30 岁',go(){screenOn=0;focusI=2;warmOn=1;frames.forEach((f,i)=>lit(i,i==2?1:.25));title('30 岁 ｜ AI 教父');say('30 岁 ｜ AI 教父');bg('office');const a=camAt(2,2.8,.9);moveCam(a,.8);setTimeout(()=>moveCam(camAt(2,2.2,-.3),1.6),850)}},
+{t:26,go(){say('Token 消耗：1.28 亿 ｜ 部门第一');moveCam(camAt(2,1.6,0),3)}},
+{t:31,go(){flash('rgba(120,200,255,.8)');say('恭喜！您的岗位已具备“全自动化潜力”','warn');red.intensity=40;setTimeout(()=>red.intensity=0,700)}},
+{t:34,go(){say('林小满 加了一个煎蛋|宝宝别光顾着开会，先吃饭。');warmOn=1;moveCam(camAt(2,1.1,-.4),2.5)}},
+{t:37,gate:'按空格，进入他的 40 岁',go(){focusI=3;warmOn=0;frames.forEach((f,i)=>lit(i,i==3?1:.25));title('40 岁 ｜ 2036');say('40 岁 ｜ 2036');bg(null);
+ surfCloud(pFrom,frames[2].holder);surfCloud(pTo,frames[3].holder);frames[2].holder.visible=false;frames[3].holder.visible=false;morph(2.6,1,()=>{frames[3].holder.visible=true;frames[2].holder.visible=true});moveCam(camAt(3,3.2),2)}},
+{t:41,go(){say('骑手：陈默|送达：我们的家');bg('door');moveCam(camAt(3,5.2,.6),4)}},
+{t:46,go(){say('老公，回家吃饭。|下单人：林小满');warmOn=1;moveCam(camAt(3,1.5,-.2),3.5)}},
+{t:50,gate:'按空格，查看最后的记忆',go(){focusI=4;warmOn=1;frames.forEach((f,i)=>lit(i,i==4?1:.25));title('晚年 ｜ 儿孙满堂');say('晚年 ｜ 儿孙满堂');bg('home');blurT0=now;moveCam(camAt(4,2),1.5)}},
+{t:54,go(){say('原来，他的一生一直有人在等他回家。');moveCam(overview,3)}},
+{t:57,go(){title('');say('回到案发现场：人生遗物');frames.forEach((f,i)=>lit(i,1.4));setTimeout(()=>{pupil(2)},1200)}},
+{t:60,go(){}}];
+
+let focusI=3,now=0,seg=-1,playing=false,waiting=false,segStart=0,neonOn=0,screenOn=0,warmOn=0,spin=null,blurT0=-1,mor=null;
+function pupil(m){const e=$('pupil');if(m==1){e.style.opacity=1;e.animate([{'--r':'2%',opacity:1},{'--r':'80%',opacity:0}],{duration:2000,fill:'forwards'})}
+ else if(m==2){e.animate([{'--r':'80%',opacity:0},{'--r':'0%',opacity:1}],{duration:1800,fill:'forwards'})}}
+CSS.registerProperty&&CSS.registerProperty({name:'--r',syntax:'<percentage>',inherits:false,initialValue:'0%'});
+function morph(d,op,cb){mor={t0:now,d,op,cb};pm.opacity=op}
+function next(){seg++;if(seg>=SHOTS.length-1){seg=SHOTS.length-2;hint('按空格，重新播放');waiting=true;return}const s=SHOTS[seg];segStart=now;hint('');s.go()}
+function tryAdvance(){if(!playing){playing=true;$('start').style.display='none';next();return}
+ if(!waiting){let j=seg+1;while(j<SHOTS.length-1&&!SHOTS[j].gate)j++;if(j>=SHOTS.length-1)return;seg=j-1;waiting=true}if(waiting){waiting=false;hint('');if(seg>=SHOTS.length-2){location.reload();return}fastUntil=now+1;next()}}
+addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();tryAdvance()}});$('start').onclick=tryAdvance;
+
+const clock=new THREE.Clock();
+function loop(){requestAnimationFrame(loop);const dt=Math.min(clock.getDelta(),.05);now+=dt;
+ if(playing&&!waiting&&seg<SHOTS.length-1){const dur=SHOTS[seg+1].t-SHOTS[seg].t;if(now-segStart>=dur/SPD){if(SHOTS[seg+1].gate){waiting=true;hint(SHOTS[seg+1].gate)}else next()}}
+ // 相机
+ const k=1-(1-Math.min(1,(now-cT0)/cDur))**3;cam.position.lerpVectors(cFrom.p,cTo.p,k);curT.lerpVectors(cFrom.t,cTo.t,k);cam.position.y+=Math.sin(now*.7)*.02;cam.lookAt(curT);
+ // 投影框
+ frames.forEach((f,i)=>{const tgt=f.on?(.25+f.glow*.75):0;f.panel.material.opacity+=(tgt-f.panel.material.opacity)*.08*(1+Math.random()*.3*(Math.random()<.03));
+  f.beam.material.opacity=f.panel.material.opacity*.18;f.mem.material.opacity+=(f.memT-f.mem.material.opacity)*.04;f.holder.position.y=Math.sin(now*1.3+i)*.06;if(!(spin&&spin.i==i)&&!(i==0&&spin))f.holder.rotation.y=Math.sin(now*.5+i)*.25*(f.glow>.9?1:.4);
+  f.holder.scale.setScalar(f.on?1:.001)});
+ if(spin){const s=Math.min(1,(now-spin.t0)/spin.d);frames[spin.i].holder.rotation.y=spin.from+(spin.to-spin.from)*ease(s)}
+ const ph=frames[1].holder.userData.ph;if(ph&&ph.material[4])ph.material[4].emissive.setRGB(.1*screenOn,.4*screenOn,.6*screenOn);
+ if(blurT0>=0){const b=Math.max(0,1-(now-blurT0)/2);frames[4].panel.material.opacity=Math.max(frames[4].panel.material.opacity,b)}
+ warm.position.copy(frames[focusI].root.position).add(V(0,-.5,1));warm.intensity+=(warmOn*30-warm.intensity)*.08;
+ neon.children.forEach((m,j)=>m.material.opacity=neonOn*(.15+.35*(Math.sin(now*3+j*1.7)>.6?1:.3)));
+ red.intensity=Math.max(red.intensity*.9,neonOn*(Math.sin(now*6)>0?6:0));blue.intensity=neonOn*(Math.sin(now*6)>0?0:6);purp.intensity=14+Math.sin(now*.8)*5;
+ const a=rg.attributes.position.array;for(let i=0;i<rainN;i++){a[i*3+1]-=dt*14;if(a[i*3+1]<-2)a[i*3+1]=18}rg.attributes.position.needsUpdate=true;
+ if(mor){const m=Math.min(1,(now-mor.t0)/mor.d),e=ease(m);for(let i=0;i<PN*3;i++)pp[i]=pFrom[i]+(pTo[i]-pFrom[i])*e+(i%3==1?Math.sin(e*Math.PI)*((i*7919)%100/100-.5):0);
+  pg.attributes.position.needsUpdate=true;pm.opacity=mor.op*Math.sin(Math.min(1,m*1.1)*Math.PI)**.5;if(m>=1){pm.opacity=0;mor.cb&&mor.cb();mor=null}}
+ const d=new Date(Date.UTC(2126,10,8,4,31,7+Math.floor(now)));$('clock').innerHTML=d.toISOString().replace('T',' ').slice(0,19)+'<br>FOREST HWY 09 · MEMORY BUFFER';
+ R.render(S,cam)}
+let pendingGate=false;
+loop();
+</script></body></html>
